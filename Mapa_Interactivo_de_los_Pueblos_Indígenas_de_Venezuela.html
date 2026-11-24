@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa Interactivo de los Pueblos Indígenas de Venezuela (44 Pueblos Originarios)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Merriweather -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,700;1,400&display=swap" rel="stylesheet" />
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            serif: ['Merriweather', 'serif'],
+          },
+          colors: {
+            arena: {
+              50: '#fbf9f5',
+              100: '#f5f0e6',
+              200: '#e8dec8',
+              300: '#d7c5a3',
+              400: '#c2a67a',
+              500: '#b08b57',
+            },
+            selva: {
+              700: '#1f4e3d',
+              800: '#173c2f',
+              900: '#0f2920',
+            },
+            terracota: {
+              500: '#c85a32',
+              600: '#a84522',
+              700: '#873519',
+            },
+            rio: {
+              500: '#2b6cb0',
+              600: '#1e4e8c',
+              100: '#dbeafe',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Estilos personalizados para barras de desplazamiento, animaciones del mapa y estética cartográfica */
+    body {
+      background-color: #f5f0e6;
+      color: #1f2937;
+    }
+
+    /* Scrollbar sutil */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f5f0e6;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c2a67a;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #9c7e54;
+    }
+
+    /* Patrón topográfico sutil para el fondo del mapa */
+    .map-canvas-bg {
+      background-color: #efe9dc;
+      background-image: 
+        radial-gradient(circle at 25% 25%, rgba(31, 78, 61, 0.04) 2px, transparent 0),
+        radial-gradient(circle at 75% 75%, rgba(200, 90, 50, 0.04) 2px, transparent 0);
+      background-size: 36px 36px;
+    }
+
+    /* Regiones SVG */
+    .region-shape {
+      transition: fill 0.25s ease, stroke-width 0.25s ease, filter 0.25s ease;
+      cursor: pointer;
+    }
+    .region-shape:hover {
+      filter: brightness(0.95);
+      stroke-width: 2;
+    }
+    .region-shape.active-region {
+      stroke: #173c2f;
+      stroke-width: 2.5;
+      filter: drop-shadow(0 4px 6px rgba(23, 60, 47, 0.22));
+    }
+
+    /* Marcadores de pueblos */
+    .pueblo-marker {
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .pueblo-marker:hover {
+      transform: scale(1.28);
+    }
+    .pueblo-marker.selected {
+      transform: scale(1.38);
+    }
+
+    @keyframes pulseRing {
+      0% {
+        transform: scale(0.85);
+        opacity: 0.85;
+      }
+      70% {
+        transform: scale(2.1);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(2.1);
+        opacity: 0;
+      }
+    }
+    .pulse-circle {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: pulseRing 2s infinite ease-out;
+    }
+
+    /* Evitar selección de texto al arrastrar mapa */
+    .no-select {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-terracota-500 selection:text-white">
+
+  <!-- BARRA SUPERIOR / ENCABEZADO -->
+  <header class="bg-selva-900 text-arena-50 shadow-md border-b border-selva-700 sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-terracota-500 flex items-center justify-center text-white shadow-inner shrink-0">
+          <i class="fa-solid fa-compass text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="font-serif font-bold text-base sm:text-lg md:text-xl tracking-tight text-white">
+              Mapa Interactivo de los Pueblos Indígenas de Venezuela
+            </h1>
+            <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-selva-700 text-arena-200 border border-selva-700">
+              44 Pueblos Originarios
+            </span>
+          </div>
+          <p class="text-xs text-arena-300 hidden sm:block">
+            Cartografía cultural, familias lingüísticas y presencia territorial ancestral
+          </p>
+        </div>
+      </div>
+
+      <!-- Acciones rápidas y nota metodológica -->
+      <div class="flex items-center gap-2">
+        <div id="headerCounter" class="hidden md:flex items-center gap-2 bg-selva-800 px-3 py-1.5 rounded-lg border border-selva-700 text-xs text-arena-100">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Mostrando <strong id="countVisible" class="text-white">44</strong> de <strong>44</strong> pueblos</span>
+        </div>
+        <button id="btnMethodology" class="px-3 py-2 rounded-xl bg-selva-800 hover:bg-selva-700 text-arena-100 text-xs font-medium border border-selva-700 transition flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-circle-info text-arena-300"></i>
+          <span>Nota Metodológica</span>
+        </button>
+        <button id="btnResetAll" class="px-3 py-2 rounded-xl bg-terracota-600 hover:bg-terracota-500 text-white text-xs font-medium shadow-sm transition flex items-center gap-1.5 cursor-pointer" title="Restablecer filtros y vista del mapa">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span class="hidden sm:inline">Reiniciar</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL DE LA APLICACIÓN -->
+  <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+    <!-- PANEL IZQUIERDO: FILTROS Y LISTA SINCRONIZADA (4 columnas en escritorio) -->
+    <aside class="lg:col-span-4 xl:col-span-3 bg-white rounded-2xl shadow-sm border border-arena-200 flex flex-col overflow-hidden lg:h-[calc(100vh-5.5rem)]">
+      <!-- Controles de búsqueda y filtro -->
+      <div class="p-3.5 bg-arena-50 border-b border-arena-200 space-y-3">
+        <!-- Buscador -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm"></i>
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="Buscar pueblo, lengua o estado..."
+            class="w-full pl-9 pr-8 py-2 bg-white border border-arena-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-selva-700 focus:border-transparent transition"
+          />
+          <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs p-1 cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Filtros selectores -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+          <div>
+            <label for="familyFilter" class="block text-[11px] font-semibold uppercase tracking-wider text-stone-500 mb-1">
+              Familia Lingüística
+            </label>
+            <select id="familyFilter" class="w-full px-3 py-2 bg-white border border-arena-300 rounded-xl text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-selva-700 cursor-pointer">
+              <option value="ALL">Todas las familias (10)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="regionFilter" class="block text-[11px] font-semibold uppercase tracking-wider text-stone-500 mb-1">
+              Macro-Región / Territorio
+            </label>
+            <select id="regionFilter" class="w-full px-3 py-2 bg-white border border-arena-300 rounded-xl text-xs font-medium text-stone-700 focus:outline-none focus:ring-2 focus:ring-selva-700 cursor-pointer">
+              <option value="ALL">Todas las regiones de Venezuela</option>
+              <option value="Zulia / Occidente">Zulia y Occidente (Perijá / Guajira)</option>
+              <option value="Andes y Centro-Occidente">Andes y Centro-Occidente</option>
+              <option value="Llanos">Llanos (Apure / Barinas / Portuguesa)</option>
+              <option value="Oriente y Delta">Oriente y Delta Amacuro</option>
+              <option value="Guayana (Bolívar)">Guayana (Estado Bolívar)</option>
+              <option value="Amazonía (Amazonas)">Amazonía (Estado Amazonas)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Resumen móvil del contador -->
+        <div class="flex items-center justify-between text-xs text-stone-600 pt-1">
+          <span>Resultados: <strong id="mobileCountVisible" class="text-selva-800">44</strong> / 44</span>
+          <span id="activeFilterBadge" class="hidden text-[11px] px-2 py-0.5 rounded-full bg-terracota-500/10 text-terracota-700 font-medium">
+            Filtros activos
+          </span>
+        </div>
+      </div>
+
+      <!-- Lista sincronizada de pueblos -->
+      <div id="pueblosList" class="flex-1 overflow-y-auto divide-y divide-arena-100 max-h-[340px] lg:max-h-none">
+        <!-- Renderizado dinámico por JS -->
+      </div>
+    </aside>
+
+    <!-- ÁREA CENTRAL: MAPA INTERACTIVO SVG (8 columnas en escritorio, o 5 si ficha abierta en xl) -->
+    <section class="lg:col-span-8 xl:col-span-6 bg-white rounded-2xl shadow-sm border border-arena-200 overflow-hidden flex flex-col lg:h-[calc(100vh-5.5rem)] relative">
+      
+      <!-- Barra de herramientas del mapa -->
+      <div class="px-4 py-2.5 bg-arena-50 border-b border-arena-200 flex flex-wrap items-center justify-between gap-2 z-10">
+        <div class="flex items-center gap-2 text-xs text-stone-600">
+          <i class="fa-solid fa-layer-group text-selva-700"></i>
+          <span class="font-medium">Haz clic en una región o marcador para explorar</span>
+        </div>
+
+        <!-- Botones de vista rápida regional -->
+        <div class="flex items-center gap-1.5">
+          <button id="toggleLabels" class="px-2.5 py-1 rounded-lg bg-white hover:bg-arena-100 border border-arena-300 text-xs font-medium text-stone-700 transition cursor-pointer flex items-center gap-1" title="Mostrar u ocultar etiquetas en el mapa">
+            <i class="fa-solid fa-tag text-terracota-500"></i>
+            <span>Etiquetas</span>
+          </button>
+          <div class="flex items-center bg-white border border-arena-300 rounded-lg overflow-hidden">
+            <button id="zoomIn" class="px-2.5 py-1 hover:bg-arena-100 text-stone-700 text-xs transition cursor-pointer" title="Acercar">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <button id="zoomReset" class="px-2 py-1 hover:bg-arena-100 text-stone-700 text-[11px] font-semibold border-x border-arena-200 transition cursor-pointer" title="Centrar mapa">
+              100%
+            </button>
+            <button id="zoomOut" class="px-2.5 py-1 hover:bg-arena-100 text-stone-700 text-xs transition cursor-pointer" title="Alejar">
+              <i class="fa-solid fa-minus"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contenedor SVG Interactivo con Pan & Zoom -->
+      <div id="mapViewport" class="relative flex-1 w-full min-h-[420px] sm:min-h-[500px] map-canvas-bg overflow-hidden cursor-grab active:cursor-grabbing no-select">
+        
+        <!-- Tooltip flotante rápido al pasar el cursor -->
+        <div id="mapTooltip" class="pointer-events-none hidden absolute z-20 bg-selva-900/95 text-white px-3 py-2 rounded-xl shadow-lg text-xs max-w-[230px] border border-selva-700 backdrop-blur-sm">
+          <div id="tooltipTitle" class="font-bold text-sm text-arena-100"></div>
+          <div id="tooltipSub" class="text-[11px] text-arena-300 mt-0.5"></div>
+        </div>
+
+        <!-- SVG Cartográfico de Venezuela -->
+        <svg id="venezuelaSvg" viewBox="0 0 820 720" class="w-full h-full">
+          <defs>
+            <!-- Sombra suave para el territorio nacional -->
+            <filter id="landShadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#5c4d3c" flood-opacity="0.18" />
+            </filter>
+            <!-- Gradiente para agua (Mar Caribe / Lago / Orinoco) -->
+            <linearGradient id="waterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#bae6fd" />
+              <stop offset="100%" stop-color="#7dd3fc" />
+            </linearGradient>
+          </defs>
+
+          <!-- Grupo transformable para Zoom y Pan -->
+          <g id="mapTransformGroup" transform="translate(0,0) scale(1)">
+            
+            <!-- Contexto geográfico: Mar Caribe y países vecinos -->
+            <text x="430" y="55" fill="#3b82f6" opacity="0.55" font-size="15" font-weight="700" letter-spacing="4" text-anchor="middle">MAR CARIBE</text>
+            <text x="120" y="450" fill="#8c7d6b" opacity="0.5" font-size="14" font-weight="600" letter-spacing="3">COLOMBIA</text>
+            <text x="490" y="685" fill="#8c7d6b" opacity="0.5" font-size="14" font-weight="600" letter-spacing="3">BRASIL</text>
+            <text x="735" y="410" fill="#8c7d6b" opacity="0.5" font-size="13" font-weight="600" letter-spacing="2">GUYANA</text>
+
+            <!-- POLÍGONOS DE LAS MACRO-REGIONES DE VENEZUELA -->
+            <g id="regionsLayer" filter="url(#landShadow)">
+              
+              <!-- 1. Zulia y Occidente (Península de la Guajira, Sierra de Perijá, Cuenca del Lago) -->
+              <path
+                id="reg-zulia"
+                data-region="Zulia / Occidente"
+                class="region-shape"
+                fill="#e9dcc4"
+                stroke="#b09a78"
+                stroke-width="1.5"
+                d="M 155,75 L 178,72 L 185,95 L 172,118 L 195,125 L 218,112 L 235,118 L 232,145 L 220,175 L 212,212 L 192,235 L 160,248 L 128,242 L 105,220 L 96,192 L 104,158 L 118,132 L 136,105 Z"
+              />
+
+              <!-- Lago de Maracaibo (Referencia hídrica clave) -->
+              <path
+                d="M 152,135 C 166,132 178,148 180,172 C 182,198 168,218 152,218 C 136,218 126,196 128,172 C 130,150 140,138 152,135 Z"
+                fill="url(#waterGrad)"
+                stroke="#38bdf8"
+                stroke-width="1.2"
+              />
+              <text x="154" y="180" fill="#0369a1" font-size="8.5" font-weight="600" text-anchor="middle" opacity="0.85">Lago de</text>
+              <text x="154" y="190" fill="#0369a1" font-size="8.5" font-weight="600" text-anchor="middle" opacity="0.85">Maracaibo</text>
+
+              <!-- 2. Andes y Centro-Occidente (Falcón, Lara, Trujillo, Mérida, Táchira, Yaracuy, Carabobo, Aragua, Capital) -->
+              <path
+                id="reg-andes"
+                data-region="Andes y Centro-Occidente"
+                class="region-shape"
+                fill="#dfd0b4"
+                stroke="#b09a78"
+                stroke-width="1.5"
+                d="M 218,112 L 265,92 L 305,105 L 325,132 L 368,142 L 420,145 L 448,152 L 442,175 L 395,182 L 342,186 L 295,198 L 255,218 L 215,245 L 178,268 L 145,265 L 128,242 L 160,248 L 192,235 L 212,212 L 220,175 L 232,145 L 235,118 Z"
+              />
+
+              <!-- 3. Llanos (Apure, Barinas, Portuguesa, Cojedes, Guárico) -->
+              <path
+                id="reg-llanos"
+                data-region="Llanos"
+                class="region-shape"
+                fill="#f2e7d0"
+                stroke="#b09a78"
+                stroke-width="1.5"
+                d="M 145,265 L 178,268 L 215,245 L 255,218 L 295,198 L 342,186 L 395,182 L 442,175 L 478,195 L 485,245 L 475,288 L 415,296 L 355,305 L 295,318 L 235,326 L 172,324 L 154,295 Z"
+              />
+
+              <!-- 4. Oriente y Delta Amacuro (Anzoátegui, Monagas, Sucre, Nueva Esparta, Delta Amacuro) -->
+              <path
+                id="reg-oriente"
+                data-region="Oriente y Delta"
+                class="region-shape"
+                fill="#e2d6bc"
+                stroke="#b09a78"
+                stroke-width="1.5"
+                d="M 448,152 L 495,158 L 542,142 L 598,138 L 615,152 L 585,168 L 618,185 L 658,215 L 672,248 L 642,272 L 595,278 L 545,272 L 475,288 L 485,245 L 478,195 L 442,175 Z"
+              />
+              <!-- Isla de Margarita (Nueva Esparta) -->
+              <path
+                data-region="Oriente y Delta"
+                class="region-shape"
+                fill="#e2d6bc"
+                stroke="#b09a78"
+                stroke-width="1.3"
+                d="M 555,116 L 576,112 L 582,122 L 562,126 Z"
+              />
+
+              <!-- 5. Guayana - Estado Bolívar -->
+              <path
+                id="reg-bolivar"
+                data-region="Guayana (Bolívar)"
+                class="region-shape"
+                fill="#d4dec8"
+                stroke="#8fa182"
+                stroke-width="1.5"
+                d="M 355,305 L 415,296 L 475,288 L 545,272 L 595,278 L 642,272 L 665,308 L 652,355 L 638,405 L 622,455 L 585,468 L 535,462 L 495,435 L 458,415 L 415,408 L 385,375 L 365,342 Z"
+              />
+
+              <!-- 6. Amazonía - Estado Amazonas -->
+              <path
+                id="reg-amazonas"
+                data-region="Amazonía (Amazonas)"
+                class="region-shape"
+                fill="#c5d6b8"
+                stroke="#7d9470"
+                stroke-width="1.5"
+                d="M 355,305 L 365,342 L 385,375 L 415,408 L 458,415 L 495,435 L 512,485 L 492,535 L 468,585 L 432,625 L 405,638 L 385,602 L 372,545 L 348,495 L 332,445 L 338,385 L 345,340 Z"
+              />
+            </g>
+
+            <!-- RÍO ORINOCO Y PRINCIPALES CUENCAS FLUVIALES -->
+            <g id="riversLayer" pointer-events="none">
+              <!-- Curso del Río Orinoco desde Amazonas hasta el Delta -->
+              <path
+                d="M 465,545 C 435,515 395,485 368,445 C 345,405 342,355 355,305 C 395,295 455,288 525,275 C 575,266 618,248 655,235"
+                fill="none"
+                stroke="#3b82f6"
+                stroke-width="3.2"
+                stroke-linecap="round"
+                opacity="0.72"
+              />
+              <!-- Río Apure -->
+              <path
+                d="M 195,285 C 245,292 295,298 355,305"
+                fill="none"
+                stroke="#3b82f6"
+                stroke-width="2"
+                stroke-dasharray="4 2"
+                opacity="0.6"
+              />
+              <!-- Río Caroní -->
+              <path
+                d="M 555,435 C 545,385 538,335 532,276"
+                fill="none"
+                stroke="#3b82f6"
+                stroke-width="2.2"
+                opacity="0.65"
+              />
+              <text x="468" y="278" fill="#1d4ed8" font-size="9.5" font-weight="700" font-style="italic" transform="rotate(-8 468,278)">Río Orinoco</text>
+            </g>
+
+            <!-- ETIQUETAS DE MACRO-REGIONES -->
+            <g id="regionLabelsLayer" pointer-events="none" opacity="0.65">
+              <text x="155" y="122" fill="#5c4932" font-size="10" font-weight="700" text-anchor="middle">ZULIA / GUAJIRA</text>
+              <text x="275" y="162" fill="#5c4932" font-size="10" font-weight="700" text-anchor="middle">ANDES Y CENTRO</text>
+              <text x="315" y="255" fill="#5c4932" font-size="11" font-weight="700" text-anchor="middle">LLANOS</text>
+              <text x="545" y="215" fill="#5c4932" font-size="10" font-weight="700" text-anchor="middle">ORIENTE Y DELTA</text>
+              <text x="530" y="365" fill="#2d4227" font-size="12" font-weight="700" text-anchor="middle">GUAYANA (BOLÍVAR)</text>
+              <text x="415" y="495" fill="#23381e" font-size="12" font-weight="700" text-anchor="middle">AMAZONÍA (AMAZONAS)</text>
+            </g>
+
+            <!-- CAPA DE MARCADORES DE LOS 44 PUEBLOS INDÍGENAS -->
+            <g id="markersLayer">
+              <!-- Generados dinámicamente por JavaScript -->
+            </g>
+
+          </g>
+        </svg>
+
+        <!-- LEYENDA FLOTANTE DE FAMILIAS LINGÜÍSTICAS (ESQUINA INFERIOR IZQUIERDA) -->
+        <div class="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm border border-arena-300 rounded-xl p-2.5 shadow-md max-w-[270px] sm:max-w-xs z-10">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-selva-900">
+              Familias Lingüísticas
+            </span>
+            <button id="toggleLegend" class="text-[11px] text-stone-500 hover:text-selva-800 cursor-pointer">
+              <i class="fa-solid fa-chevron-down"></i>
+            </button>
+          </div>
+          <div id="legendGrid" class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+            <!-- Renderizado dinámico por JS -->
+          </div>
+        </div>
+
+        <!-- ROSA DE LOS VIENTOS DECORATIVA -->
+        <div class="hidden sm:flex absolute top-3 right-3 w-11 h-11 rounded-full bg-white/85 border border-arena-300 items-center justify-center text-selva-800 shadow-sm pointer-events-none">
+          <div class="text-center leading-none">
+            <span class="block text-[9px] font-bold text-terracota-600">N</span>
+            <i class="fa-regular fa-compass text-lg"></i>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL DERECHO: FICHA ETNOGRÁFICA DETALLADA (3 columnas en xl, o bloque inferior en tablet/móvil) -->
+    <section id="detailPanel" class="lg:col-span-12 xl:col-span-3 bg-white rounded-2xl shadow-sm border border-arena-200 overflow-hidden flex flex-col xl:h-[calc(100vh-5.5rem)]">
+      <!-- Contenido dinámico de la ficha etnográfica -->
+      <div id="detailContent" class="flex-1 overflow-y-auto p-4 sm:p-5">
+        <!-- Estado inicial o pueblo seleccionado -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL DE NOTA METODOLÓGICA Y FUENTES -->
+  <div id="methodologyModal" class="hidden fixed inset-0 z-50 bg-selva-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-arena-300 overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+      <div class="bg-selva-900 text-white px-5 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <i class="fa-solid fa-book-open text-arena-300"></i>
+          <h2 class="font-serif font-bold text-base sm:text-lg">Nota Metodológica y Cartográfica</h2>
+        </div>
+        <button id="closeMethodology" class="text-arena-300 hover:text-white p-1 cursor-pointer">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-3 text-sm text-stone-700 leading-relaxed max-h-[75vh] overflow-y-auto">
+        <p>
+          <strong>Sobre los 44 pueblos originarios:</strong> En el ámbito educativo, institucional (MINPI) y censal (Instituto Nacional de Estadística - INE) de Venezuela se utiliza como referencia estándar el catálogo de <strong>44 pueblos indígenas</strong> reconocidos en el territorio nacional, agrupados en alrededor de diez familias lingüísticas y lenguas independientes.
+        </p>
+        <p>
+          <strong>Dinámica territorial y movilidad:</strong> Los territorios indígenas no responden a límites rígidos municipales ni estatales; se articulan históricamente en torno a cuencas hidrográficas (como el Orinoco, Ventuari, Caroní, Cuyuní y Catatumbo), sabanas y sistemas montañosos. Los marcadores en este mapa representan <em>zonas de asentamiento ancestral y referencia histórica</em>.
+        </p>
+        <p>
+          <strong>Presencia transfronteriza y urbana:</strong> Numerosos pueblos comparten territorios ancestrales con Colombia, Brasil y Guyana (ej. Wayúu, Yanomami, Pemón, Kurripako, Jiwi, Warao). Asimismo, una proporción significativa de la población indígena reside hoy en centros urbanos como Maracaibo, Caracas, Puerto Ayacucho, Ciudad Bolívar y Tucupita.
+        </p>
+        <div class="bg-arena-50 border border-arena-200 rounded-xl p-3 text-xs text-stone-600">
+          <strong>Fuentes de referencia:</strong> XIV Censo Nacional de Población y Vivienda (INE), Atlas Sociolingüístico de Pueblos Indígenas en América Latina (UNICEF / FUNPROEIB Andes) y catálogos etnográficos del Ministerio del Poder Popular para los Pueblos Indígenas.
+        </div>
+      </div>
+      <div class="px-5 py-3 bg-arena-50 border-t border-arena-200 flex justify-end">
+        <button id="closeMethodologyBtn" class="px-4 py-2 rounded-xl bg-selva-800 hover:bg-selva-700 text-white text-xs font-semibold cursor-pointer">
+          Entendido
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT PRINCIPAL DE DATOS E INTERACTIVIDAD -->
+  <script>
+    // =========================================================================
+    // 1. CONFIGURACIÓN DE FAMILIAS LINGÜÍSTICAS Y CÓDIGOS DE COLOR
+    // =========================================================================
+    const FAMILIAS = {
+      "Caribe": { color: "#1f6f54", bg: "#e6f4ef", border: "#9cd3c0" },
+      "Arahuaca (Arawak)": { color: "#c85a32", bg: "#fbece6", border: "#f2b8a2" },
+      "Yanomami": { color: "#8c2d52", bg: "#f9e8ef", border: "#e4abc2" },
+      "Chibcha": { color: "#2b6cb0", bg: "#e8f1fb", border: "#a8c9f0" },
+      "Sáliba": { color: "#b7791f", bg: "#fef5e7", border: "#f5d393" },
+      "Guahiba": { color: "#6b46c1", bg: "#f0ebfa", border: "#c7b3f2" },
+      "Jirajara": { color: "#9c4221", bg: "#f9ebe5", border: "#e5b5a1" },
+      "Tupí-Guaraní": { color: "#2f855a", bg: "#e7f6ee", border: "#9ee0be" },
+      "Timote": { color: "#4a5568", bg: "#edf2f7", border: "#cbd5e0" },
+      "Independiente / Aislada": { color: "#0d9488", bg: "#e6f7f5", border: "#99e2db" }
+    };
+
+    // =========================================================================
+    // 2. BASE DE DATOS DE LOS 44 PUEBLOS INDÍGENAS DE VENEZUELA
+    // =========================================================================
+    const PUEBLOS_INDIGENAS = [
+      {
+        id: 1,
+        nombre: "Wayúu",
+        autodenominacion: "Wayúu (Gente / Persona)",
+        familia: "Arahuaca (Arawak)",
+        region: "Zulia / Occidente",
+        estados: ["Zulia"],
+        lengua: "Wayuunaiki",
+        x: 158, y: 92,
+        demografia: "Pueblo indígena más numeroso de Venezuela (>415.000 hab. según censo INE; presencia binacional en la Península de la Guajira).",
+        descripcion: "Habitan la árida Península de la Guajira y áreas urbanas de Maracaibo. Destacan por su organización matrilineal en clanes (e'iruku), su sistema normativo propio (ley guajira administrada por el pütchipü'üi o palabrero) y su refinado arte textil (mochilas y chinchorros)."
+      },
+      {
+        id: 2,
+        nombre: "Añú",
+        autodenominacion: "Añú (Gente de agua)",
+        familia: "Arahuaca (Arawak)",
+        region: "Zulia / Occidente",
+        estados: ["Zulia"],
+        lengua: "Añunnükü (en revitalización)",
+        x: 162, y: 126,
+        demografia: "Alrededor de 21.000 habitantes concentrados en la Laguna de Sinamaica, Santa Rosa de Agua y costas del Lago de Maracaibo.",
+        descripcion: "Pueblo palafítico por excelencia. Construyen sus viviendas sobre pilotes de madera de mangle encima de las aguas del Lago de Maracaibo y la Laguna de Sinamaica, sustentándose en la pesca artesanal y el aprovechamiento de la enea."
+      },
+      {
+        id: 3,
+        nombre: "Yukpa",
+        autodenominacion: "Yukpa (Gente mansa / del monte)",
+        familia: "Caribe",
+        region: "Zulia / Occidente",
+        estados: ["Zulia"],
+        lengua: "Yukpa",
+        x: 112, y: 175,
+        demografia: "Más de 10.000 habitantes en la vertiente venezolana de la Sierra de Perijá (cuencas de los ríos Tukuko, Yaza y Apón).",
+        descripcion: "Único pueblo de filiación lingüística Caribe en el occidente venezolano. Habitan las zonas montañosas de la Sierra de Perijá, combinando agricultura de conuco (maíz, yuca, plátano) con cestería y flautas tradicionales."
+      },
+      {
+        id: 4,
+        nombre: "Barí",
+        autodenominacion: "Barí (Gente)",
+        familia: "Chibcha",
+        region: "Zulia / Occidente",
+        estados: ["Zulia"],
+        lengua: "Barí ara",
+        x: 114, y: 215,
+        demografia: "Aproximadamente 2.800 habitantes en Venezuela (cuenca del río Catatumbo, sur de la Sierra de Perijá); pueblo transfronterizo con Colombia.",
+        descripcion: "Pueblo de raíz lingüística Chibcha conocido por sus grandes viviendas comunales multifamiliares (bohíos o 'sa') rodeadas de cultivos colectivos en la selva húmeda del Catatumbo."
+      },
+      {
+        id: 5,
+        nombre: "Japrería",
+        autodenominacion: "Japrería",
+        familia: "Caribe",
+        region: "Zulia / Occidente",
+        estados: ["Zulia"],
+        lengua: "Japrería",
+        x: 122, y: 152,
+        demografia: "Población minoritaria (~250 a 300 habitantes) ubicada en el piedemonte norte de la Sierra de Perijá (río Palmar).",
+        descripcion: "Subgrupo históricamente emparentado con los Yukpa que conserva identidad propia y lucha por la preservación de su lengua y tierras en las estribaciones septentrionales de Perijá."
+      },
+      {
+        id: 6,
+        nombre: "Yanomami",
+        autodenominacion: "Yanomami (Ser humano)",
+        familia: "Yanomami",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Yanomamö / Yanomae",
+        x: 438, y: 545,
+        demografia: "Más de 11.000 habitantes en Venezuela (Alto Orinoco, Ocamo, Mavaca y Siapa); pueblo binacional con Brasil.",
+        descripcion: "Habitan la selva tropical del Alto Orinoco en grandes casas circulares comunales llamadas 'shabonos'. Mantienen un profundo conocimiento botánico, prácticas chamánicas y sistemas de intercambio intercomunitario."
+      },
+      {
+        id: 7,
+        nombre: "Sanemá",
+        autodenominacion: "Sanemá / Sanumá",
+        familia: "Yanomami",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar", "Amazonas"],
+        lengua: "Sanemá",
+        x: 472, y: 422,
+        demografia: "Alrededor de 3.000 habitantes en las cuencas altas de los ríos Caura, Erebato y Ventuari.",
+        descripcion: "Rama septentrional de la familia Yanomami. Aunque comparten raíces lingüísticas con los Yanomami del Alto Orinoco, han tenido estrecho contacto cultural con los Ye'kwana en las selvas del Caura y Erebato."
+      },
+      {
+        id: 8,
+        nombre: "Piaroa",
+        autodenominacion: "Uwottüja / Wóthuha (Gente de conocimiento)",
+        familia: "Sáliba",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas", "Bolívar"],
+        lengua: "Wóthuha tivene (Piaroa)",
+        x: 368, y: 365,
+        demografia: "Más de 19.000 habitantes en las cuencas de los ríos Sipapo, Cuao, Autana, Cataniapo y Parguaza.",
+        descripcion: "Reconocidos por su ética pacifista, su compleja mitología ligada al tepuy Autana (árbol de la vida) y su rica tradición de cestería y tallas ceremoniales."
+      },
+      {
+        id: 9,
+        nombre: "Ye'kwana",
+        autodenominacion: "Ye'kwana (Gente de la curiara / del río)",
+        familia: "Caribe",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas", "Bolívar"],
+        lengua: "Ye'kwana",
+        x: 455, y: 392,
+        demografia: "Aproximadamente 8.000 habitantes distribuidos entre el Alto Ventuari, Cunucunuma, Padamo (Amazonas) y el río Caura (Bolívar).",
+        descripcion: "Extraordinarios navegantes fluviales y constructores de curiaras. Su arquitectura tradicional (atta o churuata) simboliza el cosmos, y su cestería geométrica (waja) narra su mitología."
+      },
+      {
+        id: 10,
+        nombre: "Pemón",
+        autodenominacion: "Pemón (Arekuna, Kamarakoto, Taurepán)",
+        familia: "Caribe",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar"],
+        lengua: "Pemón",
+        x: 608, y: 398,
+        demografia: "Más de 30.000 habitantes en la Gran Sabana, cuenca del río Caroní, Kamarata y fronteras con Brasil y Guyana.",
+        descripcion: "Guardianes ancestrales de los tepuyes y el Parque Nacional Canaima. Se subdividen en tres grandes grupos dialectales: Taurepán, Arekuna y Kamarakoto."
+      },
+      {
+        id: 11,
+        nombre: "Kariña",
+        autodenominacion: "Kari'ña",
+        familia: "Caribe",
+        region: "Oriente y Delta",
+        estados: ["Anzoátegui", "Monagas", "Bolívar", "Sucre"],
+        lengua: "Kari'ña",
+        x: 525, y: 228,
+        demografia: "Más de 33.000 habitantes en las mesas orientales (Mesa de Guanipa), riberas del Orinoco y sur de Monagas.",
+        descripcion: "Descendientes directos de los antiguos pueblos Caribes del oriente venezolano. Conservan rituales ancestrales como el Mare-Mare y el Akaatompo (celebración de los fieles difuntos), así como la alfarería y cestería."
+      },
+      {
+        id: 12,
+        nombre: "Warao",
+        autodenominacion: "Warao (Gente de canoa)",
+        familia: "Independiente / Aislada",
+        region: "Oriente y Delta",
+        estados: ["Delta Amacuro", "Monagas", "Sucre"],
+        lengua: "Warao",
+        x: 632, y: 242,
+        demografia: "Más de 48.000 habitantes, concentrados mayoritariamente en los caños del Delta del Orinoco.",
+        descripcion: "Segundo pueblo indígena más numeroso de Venezuela. Su cultura gira en torno al agua, la navegación en curiara y el aprovechamiento integral de la palma de moriche ('ohidu aru', el árbol de la vida)."
+      },
+      {
+        id: 13,
+        nombre: "Kurripako",
+        autodenominacion: "Kurripako / Baniwa del Guainía",
+        familia: "Arahuaca (Arawak)",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Kurripako",
+        x: 362, y: 495,
+        demografia: "Alrededor de 7.300 habitantes en los ríos Guainía, Negro y Atabapo; pueblo transfronterizo con Colombia y Brasil.",
+        descripcion: "Pueblo ribereño del extremo suroccidental de Amazonas, organizado en fratrías patrilineales, célebre por su dominio de la pesca fluvial, el procesamiento de la yuca brava y la cestería."
+      },
+      {
+        id: 14,
+        nombre: "Baniva",
+        autodenominacion: "Baniva / Maniba",
+        familia: "Arahuaca (Arawak)",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Baniva (en revitalización)",
+        x: 378, y: 465,
+        demografia: "Cerca de 3.500 habitantes principalmente en Maroa (río Guainía) y Puerto Ayacucho.",
+        descripcion: "Pueblo arahuaco histórico del río Guainía-Atabapo con larga tradición comercial fluvial y profundo conocimiento de los ciclos ecológicos de las aguas negras amazónicas."
+      },
+      {
+        id: 15,
+        nombre: "Baré",
+        autodenominacion: "Baré / Hanera",
+        familia: "Arahuaca (Arawak)",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Baré (en proceso de recuperación)",
+        x: 398, y: 585,
+        demografia: "Unos 5.000 habitantes asentados a lo largo del río Negro, el brazo Casiquiare y San Carlos de Río Negro.",
+        descripcion: "Antiguos habitantes del eje fluvial Casiquiare-Río Negro que desempeñaron un papel clave como articuladores del intercambio entre la cuenca del Orinoco y la del Amazonas."
+      },
+      {
+        id: 16,
+        nombre: "Piapoco",
+        autodenominacion: "Dzase / Piapoco",
+        familia: "Arahuaca (Arawak)",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Piapoco",
+        x: 352, y: 395,
+        demografia: "Alrededor de 3.500 habitantes en las riberas del Orinoco medio, cerca de San Fernando de Atabapo y Puerto Ayacucho.",
+        descripcion: "Pueblo agricultor y pescador que mantiene estrechos lazos familiares y culturales a ambos lados del río Orinoco entre Venezuela y Colombia."
+      },
+      {
+        id: 17,
+        nombre: "Puinave",
+        autodenominacion: "Wãnsöjöt / Puinave",
+        familia: "Independiente / Aislada",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Puinave",
+        x: 348, y: 432,
+        demografia: "Unos 1.800 habitantes en Venezuela (San Fernando de Atabapo y confluencia Orinoco-Guaviare-Atabapo).",
+        descripcion: "Pueblo de lengua clasificada como independiente (o macro-makú según algunos lingüistas), especializado en la horticultura de selva y la navegación en ríos de aguas negras."
+      },
+      {
+        id: 18,
+        nombre: "Warekena",
+        autodenominacion: "Warekena",
+        familia: "Arahuaca (Arawak)",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Warekena (en revitalización)",
+        x: 372, y: 525,
+        demografia: "Alrededor de 800 habitantes concentrados en Guzmán Blanco y comunidades del caño San Miguel y río Guainía.",
+        descripcion: "Pueblo arahuaco de las tierras bajas del Guainía que conserva relatos míticos sobre la creación del mundo y técnicas tradicionales de cestería y pesca."
+      },
+      {
+        id: 19,
+        nombre: "Yeral",
+        autodenominacion: "Yeral / Ñengatú",
+        familia: "Tupí-Guaraní",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Ñengatú (Língua Geral Amazônica)",
+        x: 412, y: 612,
+        demografia: "Cerca de 2.200 habitantes en el extremo sur de Amazonas (San Carlos de Río Negro y frontera con Brasil).",
+        descripcion: "Único pueblo de filiación Tupí-Guaraní en Venezuela. Su lengua, el Ñengatú, fue lengua franca comercial en la cuenca del Río Negro durante siglos."
+      },
+      {
+        id: 20,
+        nombre: "Jiwi",
+        autodenominacion: "Jiwi / Sikuani (Guahibo)",
+        familia: "Guahiba",
+        region: "Llanos",
+        estados: ["Apure", "Amazonas", "Guárico"],
+        lengua: "Jiwi (Guahibo)",
+        x: 315, y: 312,
+        demografia: "Más de 23.000 habitantes en Venezuela, distribuidos entre las sabanas de Apure (ríos Cinaruco y Meta) y el norte de Amazonas.",
+        descripcion: "Pueblo de las sabanas inundables y bosques de galería del Orinoco medio. Tradicionalmente seminómadas, combinan horticultura de yuca amarga, pesca y recolección."
+      },
+      {
+        id: 21,
+        nombre: "Pumé",
+        autodenominacion: "Pumé (Yaruro)",
+        familia: "Independiente / Aislada",
+        region: "Llanos",
+        estados: ["Apure"],
+        lengua: "Pumé (Yaruro)",
+        x: 255, y: 302,
+        demografia: "Más de 9.000 habitantes en los llanos de Apure (ríos Arauca, Cunaviche, Capanaparo y Riecito).",
+        descripcion: "Habitantes ancestrales de los llanos apureños. Destacan por su ceremonia nocturna del 'Tõhe' (canto ritual comunitario) y su lengua sin parentesco comprobado con otras familias."
+      },
+      {
+        id: 22,
+        nombre: "Cuiba",
+        autodenominacion: "Wamonae / Cuiba",
+        familia: "Guahiba",
+        region: "Llanos",
+        estados: ["Apure"],
+        lengua: "Cuiba",
+        x: 202, y: 308,
+        demografia: "Alrededor de 600 a 800 habitantes en el suroeste de Apure (ríos Capanaparo y Meta), en frontera con Colombia.",
+        descripcion: "Pueblo hermano lingüístico de los Jiwi, históricamente cazador-recolector y pescador de las sabanas abiertas del sur de Apure."
+      },
+      {
+        id: 23,
+        nombre: "Sáliba",
+        autodenominacion: "Sáliba",
+        familia: "Sáliba",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas", "Apure"],
+        lengua: "Sáliba",
+        x: 342, y: 332,
+        demografia: "Unos 350 habitantes en Venezuela (principalmente en el norte de Amazonas y riberas del Meta-Orinoco).",
+        descripcion: "Pueblo que da nombre a la familia lingüística Sáliba-Piaroa, con presencia histórica desde la época colonial en las riberas del Orinoco medio."
+      },
+      {
+        id: 24,
+        nombre: "Mako",
+        autodenominacion: "Wirö / Mako",
+        familia: "Sáliba",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Wirö (Mako)",
+        x: 398, y: 382,
+        demografia: "Aproximadamente 1.300 habitantes en las cuencas de los ríos Ventuari, Marieta y Guapuchí.",
+        descripcion: "Estrechamente emparentados en lengua y cosmovisión con los Piaroa (Uwottüja), habitan zonas interfluviales del centro-norte de Amazonas."
+      },
+      {
+        id: 25,
+        nombre: "Hoti",
+        autodenominacion: "Jodï (Gente / Persona)",
+        familia: "Independiente / Aislada",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas", "Bolívar"],
+        lengua: "Jodï",
+        x: 428, y: 358,
+        demografia: "Alrededor de 1.000 habitantes en la Sierra de Maigualida (límite entre Amazonas y Bolívar).",
+        descripcion: "Habitan las selvas montañosas de la Sierra de Maigualida. Mantuvieron un contacto esporádico con el exterior hasta finales del siglo XX y poseen un extraordinario conocimiento ecológico del bosque."
+      },
+      {
+        id: 26,
+        nombre: "Eñepá",
+        autodenominacion: "E'ñepá (Panare)",
+        familia: "Caribe",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar"],
+        lengua: "E'ñepá",
+        x: 412, y: 318,
+        demografia: "Más de 4.600 habitantes en el municipio Cedeño (cuencas de los ríos Cuchivero, Guaniamo y Suapure).",
+        descripcion: "Pueblo Caribe del noroeste de Bolívar. Son reconocidos por su fuerte cohesión cultural, sus vestimentas tradicionales de guayuco rojo y su cestería trenzada."
+      },
+      {
+        id: 27,
+        nombre: "Akawayo",
+        autodenominacion: "Kapóng / Akawayo",
+        familia: "Caribe",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar"],
+        lengua: "Akawayo (Kapóng)",
+        x: 642, y: 332,
+        demografia: "Cerca de 1.200 habitantes en Venezuela, en el sector oriental de Bolívar (cuenca del río Cuyuní y zona en reclamación).",
+        descripcion: "Pueblo Caribe estrechamente emparentado con los Pemón, habitante de los bosques húmedos orientales de la Guayana."
+      },
+      {
+        id: 28,
+        nombre: "Arawak",
+        autodenominacion: "Lokono (La gente)",
+        familia: "Arahuaca (Arawak)",
+        region: "Oriente y Delta",
+        estados: ["Delta Amacuro", "Bolívar"],
+        lengua: "Lokono",
+        x: 648, y: 262,
+        demografia: "Alrededor de 800 a 1.000 habitantes en el sureste de Delta Amacuro (ríos Amacuro y Barima) y noreste de Bolívar.",
+        descripcion: "Representantes directos de los Lokono que dieron nombre a toda la gran familia lingüística Arahuaca del continente americano."
+      },
+      {
+        id: 29,
+        nombre: "Sapé",
+        autodenominacion: "Sapé / Kariana",
+        familia: "Independiente / Aislada",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar"],
+        lengua: "Sapé (críticamente amenazada)",
+        x: 525, y: 405,
+        demografia: "Pueblo altamente vulnerable con menos de 50 personas registradas en el Alto Paragua.",
+        descripcion: "Uno de los pueblos originarios más pequeños de Venezuela, asentado históricamente en las cabeceras del río Paragua junto a los Uruak."
+      },
+      {
+        id: 30,
+        nombre: "Uruak",
+        autodenominacion: "Uruak / Arutani",
+        familia: "Independiente / Aislada",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar"],
+        lengua: "Uruak (críticamente amenazada)",
+        x: 545, y: 425,
+        demografia: "Población muy reducida (menos de 50 personas) en el Alto Paragua y zona fronteriza con Brasil.",
+        descripcion: "Pueblo ancestral de las selvas del Alto Paragua cuya lengua es considerada aislada y constituye un patrimonio lingüístico único."
+      },
+      {
+        id: 31,
+        nombre: "Chaima",
+        autodenominacion: "Chaima",
+        familia: "Caribe",
+        region: "Oriente y Delta",
+        estados: ["Sucre", "Monagas"],
+        lengua: "Chaima (en revitalización)",
+        x: 565, y: 175,
+        demografia: "Más de 2.000 personas autorreconocidas en el macizo del Turimiquire (Cumanacoa, Caripe, San Antonio de Capayacuar).",
+        descripcion: "Pueblo histórico del macizo montañoso oriental (estudiado por Alejandro de Humboldt en Caripe), protagonista de procesos contemporáneos de recuperación cultural y lingüística."
+      },
+      {
+        id: 32,
+        nombre: "Cumanagoto",
+        autodenominacion: "Cumanagoto",
+        familia: "Caribe",
+        region: "Oriente y Delta",
+        estados: ["Anzoátegui", "Sucre"],
+        lengua: "Cumanagoto (en revitalización)",
+        x: 498, y: 172,
+        demografia: "Más de 3.000 personas autorreconocidas en las zonas costeras y valles del norte de Anzoátegui y oeste de Sucre.",
+        descripcion: "Antiguos pobladores de la costa nororiental (Cumaná y Neverí), conocidos por su resistencia histórica y su rica tradición marítima y agrícola."
+      },
+      {
+        id: 33,
+        nombre: "Píritu",
+        autodenominacion: "Píritu",
+        familia: "Caribe",
+        region: "Oriente y Delta",
+        estados: ["Anzoátegui"],
+        lengua: "Píritu (variante Caribe oriental)",
+        x: 468, y: 168,
+        demografia: "Alrededor de 800 habitantes autorreconocidos en los alrededores de Píritu y Clarines (Anzoátegui).",
+        descripcion: "Pueblo Caribe costero vinculado culturalmente a los Cumanagoto y Palenque del norte de Anzoátegui."
+      },
+      {
+        id: 34,
+        nombre: "Waikerí",
+        autodenominacion: "Waikerí / Guaiquerí",
+        familia: "Caribe",
+        region: "Oriente y Delta",
+        estados: ["Nueva Esparta", "Sucre"],
+        lengua: "Waikerí (histórica)",
+        x: 568, y: 120,
+        demografia: "Más de 2.500 personas autorreconocidas en la Isla de Margarita (El Poblado, La Vecindad) y costas de Sucre.",
+        descripcion: "Navegantes y pescadores ancestrales de las islas de Margarita, Coche y Cubagua, con fuerte identidad insular y tradición pesquera."
+      },
+      {
+        id: 35,
+        nombre: "Ayamán",
+        autodenominacion: "Ayamán",
+        familia: "Jirajara",
+        region: "Andes y Centro-Occidente",
+        estados: ["Lara", "Falcón"],
+        lengua: "Ayamán (en recuperación)",
+        x: 262, y: 135,
+        demografia: "Cerca de 1.500 personas autorreconocidas en Siquisique y las montañas del norte de Lara y sur de Falcón.",
+        descripcion: "Pueblo de la familia lingüística Jirajara famoso por conservar la ceremonia ritual de 'Las Turas', baile colectivo de agradecimiento a la naturaleza por las cosechas de maíz."
+      },
+      {
+        id: 36,
+        nombre: "Gayón",
+        autodenominacion: "Gayón",
+        familia: "Jirajara",
+        region: "Andes y Centro-Occidente",
+        estados: ["Lara"],
+        lengua: "Gayón (histórica)",
+        x: 278, y: 155,
+        demografia: "Más de 1.200 personas autorreconocidas en Bobare, Río Claro y zonas semiáridas del estado Lara.",
+        descripcion: "Antiguos habitantes de las depresiones y serranías larenses, destacados por su tradición alfarera, tejido de fibras de cocuiza y resistencia histórica."
+      },
+      {
+        id: 37,
+        nombre: "Jirajara",
+        autodenominacion: "Jirajara / Xirahara",
+        familia: "Jirajara",
+        region: "Andes y Centro-Occidente",
+        estados: ["Falcón", "Lara", "Yaracuy"],
+        lengua: "Jirajara (histórica)",
+        x: 285, y: 118,
+        demografia: "Comunidades autorreconocidas en la Sierra de San Luis (Falcón) y límites con Lara y Yaracuy.",
+        descripcion: "Pueblo que da nombre a la familia lingüística Jirajara del centro-occidente venezolano, históricamente asentado en zonas serranas."
+      },
+      {
+        id: 38,
+        nombre: "Timoto-Cuica",
+        autodenominacion: "Timotes y Cuicas",
+        familia: "Timote",
+        region: "Andes y Centro-Occidente",
+        estados: ["Mérida", "Trujillo", "Táchira"],
+        lengua: "Timote-Cuica (en revitalización)",
+        x: 205, y: 215,
+        demografia: "Más de 2.500 personas autorreconocidas en los páramos y valles altos de Mérida y Trujillo.",
+        descripcion: "Pueblos originarios de los Andes venezolanos. Desarrollaron avanzada agricultura de terrazas (andenes), sistemas de riego (quimpúes), silos subterráneos (mintoyes) y cerámica ritual."
+      },
+      {
+        id: 39,
+        nombre: "Amorúa",
+        autodenominacion: "Wipiwi / Amorúa",
+        familia: "Guahiba",
+        region: "Llanos",
+        estados: ["Apure", "Amazonas"],
+        lengua: "Amorúa",
+        x: 328, y: 325,
+        demografia: "Población minoritaria (~300 habitantes) en las riberas del río Meta y Puerto Páez (sur de Apure).",
+        descripcion: "Pueblo ribereño de la familia Guahiba que habita la confluencia de los ríos Meta y Orinoco en la frontera colombo-venezolana."
+      },
+      {
+        id: 40,
+        nombre: "Mapoyo",
+        autodenominacion: "Wanai (Mapoyo)",
+        familia: "Caribe",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar"],
+        lengua: "Mapoyo (Patrimonio Cultural Inmaterial UNESCO)",
+        x: 385, y: 305,
+        demografia: "Alrededor de 400 habitantes en el sector El Palomo, entre los ríos Suapure y Parguaza (noroeste de Bolívar).",
+        descripcion: "Su tradición oral y sus referentes simbólicos en el territorio ancestral fueron declarados Patrimonio Cultural Inmaterial de la Humanidad por la UNESCO en 2014."
+      },
+      {
+        id: 41,
+        nombre: "Yavarana",
+        autodenominacion: "Yawarana",
+        familia: "Caribe",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Yawarana",
+        x: 422, y: 375,
+        demografia: "Unos 350 habitantes en el valle del río Manapiare (San Juan de Manapiare, Amazonas).",
+        descripcion: "Pueblo Caribe del valle de Manapiare, estrechamente relacionado lingüísticamente con los Mapoyo y culturalmente integrado con comunidades vecinas de la región."
+      },
+      {
+        id: 42,
+        nombre: "Macushi",
+        autodenominacion: "Makuxi / Pemon-Makuxi",
+        familia: "Caribe",
+        region: "Guayana (Bolívar)",
+        estados: ["Bolívar"],
+        lengua: "Macushi",
+        x: 625, y: 428,
+        demografia: "Población minoritaria en el extremo sureste de Bolívar (frontera con Brasil y Guyana).",
+        descripcion: "Pueblo Caribe de las sabanas guayanesas muy cercano lingüística y culturalmente a los Pemón Taurepán."
+      },
+      {
+        id: 43,
+        nombre: "Inga",
+        autodenominacion: "Inga",
+        familia: "Independiente / Aislada",
+        region: "Andes y Centro-Occidente",
+        estados: ["Táchira", "Zulia", "Distrito Capital"],
+        lengua: "Inga (variante quechua septentrional)",
+        x: 152, y: 245,
+        demografia: "Comunidades registradas en zonas andinas fronterizas y núcleos urbanos.",
+        descripcion: "Pueblo originario andino de lengua quechua septentrional incluido en el catálogo censal venezolano por su presencia histórica y contemporánea en comunidades del occidente y ciudades."
+      },
+      {
+        id: 44,
+        nombre: "Guanono",
+        autodenominacion: "Wanano / Kotiria",
+        familia: "Independiente / Aislada",
+        region: "Amazonía (Amazonas)",
+        estados: ["Amazonas"],
+        lengua: "Wanano (Tucano oriental)",
+        x: 355, y: 472,
+        demografia: "Población minoritaria (~150 habitantes) en el suroeste de Amazonas (eje Guainía-Atabapo).",
+        descripcion: "Pueblo ribereño originario del noroeste amazónico (filiación Tucano oriental) con presencia registrada en comunidades fronterizas del estado Amazonas."
+      }
+    ];
+
+    // =========================================================================
+    // 3. ESTADO GLOBAL DE LA APLICACIÓN
+    // =========================================================================
+    const state = {
+      search: "",
+      family: "ALL",
+      region: "ALL",
+      selectedId: 1, // Wayúu seleccionado inicialmente como ejemplo
+      showLabels: false,
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      isDragging: false,
+      dragStartX: 0,
+      dragStartY: 0
+    };
+
+    // =========================================================================
+    // 4. REFERENCIAS AL DOM
+    // =========================================================================
+    const searchInput = document.getElementById("searchInput");
+    const clearSearch = document.getElementById("clearSearch");
+    const familyFilter = document.getElementById("familyFilter");
+    const regionFilter = document.getElementById("regionFilter");
+    const pueblosList = document.getElementById("pueblosList");
+    const markersLayer = document.getElementById("markersLayer");
+    const detailContent = document.getElementById("detailContent");
+    const countVisible = document.getElementById("countVisible");
+    const mobileCountVisible = document.getElementById("mobileCountVisible");
+    const activeFilterBadge = document.getElementById("activeFilterBadge");
+    const legendGrid = document.getElementById("legendGrid");
+    const mapTooltip = document.getElementById("mapTooltip");
+    const tooltipTitle = document.getElementById("tooltipTitle");
+    const tooltipSub = document.getElementById("tooltipSub");
+    const mapTransformGroup = document.getElementById("mapTransformGroup");
+    const mapViewport = document.getElementById("mapViewport");
+
+    // =========================================================================
+    // 5. INICIALIZACIÓN DE CONTROLES Y LEYENDA
+    // =========================================================================
+    function initControls() {
+      // Poblar selector de familias lingüísticas
+      Object.keys(FAMILIAS).forEach(fam => {
+        const count = PUEBLOS_INDIGENAS.filter(p => p.familia === fam).length;
+        const opt = document.createElement("option");
+        opt.value = fam;
+        opt.textContent = `${fam} (${count})`;
+        familyFilter.appendChild(opt);
+      });
+
+      // Poblar leyenda visual de familias lingüísticas
+      Object.entries(FAMILIAS).forEach(([fam, style]) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "flex items-center gap-1.5 text-left hover:bg-arena-100 rounded px-1 py-0.5 transition cursor-pointer truncate";
+        item.title = `Filtrar por ${fam}`;
+        item.innerHTML = `
+          <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${style.color};"></span>
+          <span class="truncate text-stone-700">${fam.split(" ")[0]}</span>
+        `;
+        item.addEventListener("click", () => {
+          familyFilter.value = (state.family === fam) ? "ALL" : fam;
+          state.family = familyFilter.value;
+          updateApp();
+        });
+        legendGrid.appendChild(item);
+      });
+    }
+
+    // =========================================================================
+    // 6. FILTRADO DE DATOS
+    // =========================================================================
+    function getFilteredPueblos() {
+      const q = state.search.trim().toLowerCase();
+      return PUEBLOS_INDIGENAS.filter(p => {
+        const matchesFamily = state.family === "ALL" || p.familia === state.family;
+        const matchesRegion = state.region === "ALL" || p.region === state.region;
+        const matchesSearch = !q ||
+          p.nombre.toLowerCase().includes(q) ||
+          p.autodenominacion.toLowerCase().includes(q) ||
+          p.lengua.toLowerCase().includes(q) ||
+          p.familia.toLowerCase().includes(q) ||
+          p.estados.some(e => e.toLowerCase().includes(q));
+        return matchesFamily && matchesRegion && matchesSearch;
+      });
+    }
+
+    // =========================================================================
+    // 7. RENDERIZADO DE LA LISTA LATERAL
+    // =========================================================================
+    function renderList(filtered) {
+      pueblosList.innerHTML = "";
+
+      if (filtered.length === 0) {
+        pueblosList.innerHTML = `
+          <div class="p-8 text-center text-stone-500">
+            <i class="fa-solid fa-compass text-3xl text-arena-300 mb-2"></i>
+            <p class="text-sm font-medium text-stone-700">No se encontraron pueblos</p>
+            <p class="text-xs mt-1">Intenta con otro término de búsqueda o limpia los filtros.</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(pueblo => {
+        const famStyle = FAMILIAS[pueblo.familia] || FAMILIAS["Independiente / Aislada"];
+        const isSelected = pueblo.id === state.selectedId;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.id = `list-item-${pueblo.id}`;
+        btn.className = `w-full text-left px-3.5 py-2.5 transition flex items-start justify-between gap-2 cursor-pointer ${
+          isSelected
+            ? "bg-selva-900/5 border-l-4 border-terracota-500"
+            : "hover:bg-arena-50 border-l-4 border-transparent"
+        }`;
+
+        btn.innerHTML = `
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${famStyle.color};"></span>
+              <span class="font-semibold text-sm text-stone-900 truncate">${pueblo.nombre}</span>
+            </div>
+            <p class="text-[11px] text-stone-500 truncate mt-0.5 pl-4">
+              ${pueblo.estados.join(", ")} · <span class="italic">${pueblo.lengua}</span>
+            </p>
+          </div>
+          <span class="text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 mt-0.5"
+            style="background-color: ${famStyle.bg}; color: ${famStyle.color}; border: 1px solid ${famStyle.border};">
+            ${pueblo.familia.split(" ")[0]}
+          </span>
+        `;
+
+        btn.addEventListener("click", () => {
+          selectPueblo(pueblo.id, true);
+        });
+
+        pueblosList.appendChild(btn);
+      });
+    }
+
+    // =========================================================================
+    // 8. RENDERIZADO DE MARCADORES EN EL MAPA SVG
+    // =========================================================================
+    function renderMarkers(filtered) {
+      markersLayer.innerHTML = "";
+      const visibleIds = new Set(filtered.map(p => p.id));
+
+      // Ordenar para que el seleccionado quede siempre encima (z-index SVG)
+      const ordered = [...PUEBLOS_INDIGENAS].sort((a, b) => {
+        if (a.id === state.selectedId) return 1;
+        if (b.id === state.selectedId) return -1;
+        return 0;
+      });
+
+      ordered.forEach(pueblo => {
+        const isVisible = visibleIds.has(pueblo.id);
+        const isSelected = pueblo.id === state.selectedId;
+        const famStyle = FAMILIAS[pueblo.familia] || FAMILIAS["Independiente / Aislada"];
+
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("class", `pueblo-marker ${isSelected ? "selected" : ""}`);
+        g.setAttribute("transform", `translate(${pueblo.x}, ${pueblo.y})`);
+        g.style.opacity = isVisible ? "1" : "0.14";
+        g.style.pointerEvents = isVisible ? "auto" : "none";
+
+        // Halo pulsante si está seleccionado
+        if (isSelected) {
+          const pulse = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          pulse.setAttribute("r", "12");
+          pulse.setAttribute("fill", famStyle.color);
+          pulse.setAttribute("class", "pulse-circle");
+          g.appendChild(pulse);
+        }
+
+        // Círculo principal del marcador
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("r", isSelected ? "8.5" : "6.2");
+        circle.setAttribute("fill", famStyle.color);
+        circle.setAttribute("stroke", "#ffffff");
+        circle.setAttribute("stroke-width", isSelected ? "2.5" : "1.8");
+        g.appendChild(circle);
+
+        // Punto interior blanco en el seleccionado
+        if (isSelected) {
+          const innerDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          innerDot.setAttribute("r", "2.5");
+          innerDot.setAttribute("fill", "#ffffff");
+          g.appendChild(innerDot);
+        }
+
+        // Etiqueta de texto (si está activado el modo etiquetas o si está seleccionado)
+        if ((state.showLabels && isVisible) || isSelected) {
+          const labelBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          const textWidth = pueblo.nombre.length * 6.2 + 10;
+          labelBg.setAttribute("x", -textWidth / 2);
+          labelBg.setAttribute("y", isSelected ? "-23" : "-19");
+          labelBg.setAttribute("width", textWidth);
+          labelBg.setAttribute("height", "14");
+          labelBg.setAttribute("rx", "4");
+          labelBg.setAttribute("fill", isSelected ? "#0f2920" : "rgba(255,255,255,0.92)");
+          labelBg.setAttribute("stroke", isSelected ? "#c85a32" : "#cbd5e1");
+          labelBg.setAttribute("stroke-width", "0.8");
+          g.appendChild(labelBg);
+
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.setAttribute("y", isSelected ? "-13" : "-9.5");
+          text.setAttribute("text-anchor", "middle");
+          text.setAttribute("font-size", "9");
+          text.setAttribute("font-weight", "700");
+          text.setAttribute("fill", isSelected ? "#ffffff" : "#1f2937");
+          text.textContent = pueblo.nombre;
+          g.appendChild(text);
+        }
+
+        // Eventos de interacción (Hover y Click)
+        g.addEventListener("mouseenter", (e) => showTooltip(e, pueblo));
+        g.addEventListener("mousemove", (e) => moveTooltip(e));
+        g.addEventListener("mouseleave", hideTooltip);
+        g.addEventListener("click", (e) => {
+          e.stopPropagation();
+          selectPueblo(pueblo.id, false);
+        });
+
+        markersLayer.appendChild(g);
+      });
+    }
+
+    // =========================================================================
+    // 9. FICHA ETNOGRÁFICA DETALLADA (PANEL DERECHO)
+    // =========================================================================
+    function renderDetailCard() {
+      const pueblo = PUEBLOS_INDIGENAS.find(p => p.id === state.selectedId);
+      if (!pueblo) return;
+
+      const famStyle = FAMILIAS[pueblo.familia] || FAMILIAS["Independiente / Aislada"];
+
+      detailContent.innerHTML = `
+        <div class="space-y-4">
+          <!-- Cabecera de la ficha -->
+          <div class="pb-3 border-b border-arena-200">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                style="background-color: ${famStyle.bg}; color: ${famStyle.color}; border: 1px solid ${famStyle.border};">
+                <span class="w-2 h-2 rounded-full" style="background-color: ${famStyle.color};"></span>
+                Familia ${pueblo.familia}
+              </span>
+              <span class="text-xs font-mono text-stone-400">#${String(pueblo.id).padStart(2, "0")} / 44</span>
+            </div>
+
+            <h2 class="font-serif font-bold text-2xl text-selva-900 leading-tight">
+              ${pueblo.nombre}
+            </h2>
+            <p class="text-xs text-stone-500 mt-1">
+              Autodenominación: <span class="font-medium text-stone-700">${pueblo.autodenominacion}</span>
+            </p>
+          </div>
+
+          <!-- Datos clave en tarjetas -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5">
+            <div class="bg-arena-50 rounded-xl p-3 border border-arena-200">
+              <div class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1">
+                <i class="fa-solid fa-location-dot text-terracota-500"></i>
+                <span>Territorio y Estados</span>
+              </div>
+              <p class="text-sm font-semibold text-stone-800">${pueblo.estados.join(", ")}</p>
+              <p class="text-xs text-stone-500 mt-0.5">Macro-región: ${pueblo.region}</p>
+            </div>
+
+            <div class="bg-arena-50 rounded-xl p-3 border border-arena-200">
+              <div class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1">
+                <i class="fa-solid fa-comments text-selva-700"></i>
+                <span>Lengua Originaria</span>
+              </div>
+              <p class="text-sm font-semibold text-stone-800">${pueblo.lengua}</p>
+            </div>
+          </div>
+
+          <!-- Reseña cultural y geográfica -->
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-selva-800 mb-1.5 flex items-center gap-1.5">
+              <i class="fa-solid fa-feather-pointed text-terracota-500"></i>
+              <span>Contexto Cultural y Geográfico</span>
+            </h3>
+            <p class="text-sm text-stone-700 leading-relaxed">
+              ${pueblo.descripcion}
+            </p>
+          </div>
+
+          <!-- Referencia demográfica -->
+          <div class="bg-rio-100/60 border border-rio-500/20 rounded-xl p-3">
+            <div class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rio-600 mb-1">
+              <i class="fa-solid fa-users"></i>
+              <span>Referencia Demográfica y Territorial</span>
+            </div>
+            <p class="text-xs text-stone-700 leading-relaxed">
+              ${pueblo.demografia}
+            </p>
+          </div>
+
+          <!-- Botón para centrar en el mapa -->
+          <div class="pt-1 flex items-center gap-2">
+            <button id="btnFocusMap" class="flex-1 py-2.5 px-4 rounded-xl bg-selva-800 hover:bg-selva-700 text-white text-xs font-semibold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-crosshairs"></i>
+              <span>Ubicar y acercar en el mapa</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("btnFocusMap").addEventListener("click", () => {
+        focusOnPueblo(pueblo);
+      });
+    }
+
+    // =========================================================================
+    // 10. INTERACCIÓN CON EL MAPA (ZOOM, PAN, TOOLTIP Y SELECCIÓN)
+    // =========================================================================
+    function applyMapTransform() {
+      mapTransformGroup.setAttribute(
+        "transform",
+        `translate(${state.panX}, ${state.panY}) scale(${state.zoom})`
+      );
+      document.getElementById("zoomReset").textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+
+    function focusOnPueblo(pueblo) {
+      state.zoom = 1.85;
+      // Centrar las coordenadas (pueblo.x, pueblo.y) dentro del viewBox 820x720
+      state.panX = 410 - pueblo.x * state.zoom;
+      state.panY = 360 - pueblo.y * state.zoom;
+      applyMapTransform();
+    }
+
+    function selectPueblo(id, shouldScrollList = false) {
+      state.selectedId = id;
+      updateApp();
+
+      if (shouldScrollList) {
+        const el = document.getElementById(`list-item-${id}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }
+
+    function showTooltip(e, pueblo) {
+      tooltipTitle.textContent = pueblo.nombre;
+      tooltipSub.textContent = `${pueblo.familia} · ${pueblo.estados.join(", ")}`;
+      mapTooltip.classList.remove("hidden");
+      moveTooltip(e);
+    }
+
+    function moveTooltip(e) {
+      const rect = mapViewport.getBoundingClientRect();
+      const x = e.clientX - rect.left + 14;
+      const y = e.clientY - rect.top - 10;
+      mapTooltip.style.left = `${Math.min(x, rect.width - 220)}px`;
+      mapTooltip.style.top = `${Math.max(y, 10)}px`;
+    }
+
+    function hideTooltip() {
+      mapTooltip.classList.add("hidden");
+    }
+
+    // Resaltado visual de la región activa en el SVG
+    function highlightRegionShapes() {
+      document.querySelectorAll(".region-shape").forEach(shape => {
+        const regName = shape.getAttribute("data-region");
+        if (state.region !== "ALL" && regName === state.region) {
+          shape.classList.add("active-region");
+        } else {
+          shape.classList.remove("active-region");
+        }
+      });
+    }
+
+    // =========================================================================
+    // 11. ACTUALIZACIÓN GENERAL DE LA UI
+    // =========================================================================
+    function updateApp() {
+      const filtered = getFilteredPueblos();
+
+      // Contadores
+      countVisible.textContent = filtered.length;
+      mobileCountVisible.textContent = filtered.length;
+
+      const hasFilters = state.search !== "" || state.family !== "ALL" || state.region !== "ALL";
+      activeFilterBadge.classList.toggle("hidden", !hasFilters);
+      clearSearch.classList.toggle("hidden", state.search === "");
+
+      highlightRegionShapes();
+      renderList(filtered);
+      renderMarkers(filtered);
+      renderDetailCard();
+    }
+
+    // =========================================================================
+    // 12. EVENT LISTENERS
+    // =========================================================================
+    searchInput.addEventListener("input", (e) => {
+      state.search = e.target.value;
+      updateApp();
+    });
+
+    clearSearch.addEventListener("click", () => {
+      state.search = "";
+      searchInput.value = "";
+      updateApp();
+    });
+
+    familyFilter.addEventListener("change", (e) => {
+      state.family = e.target.value;
+      updateApp();
+    });
+
+    regionFilter.addEventListener("change", (e) => {
+      state.region = e.target.value;
+      updateApp();
+    });
+
+    // Clic directo sobre polígonos regionales del mapa
+    document.querySelectorAll(".region-shape").forEach(shape => {
+      shape.addEventListener("click", () => {
+        const clickedRegion = shape.getAttribute("data-region");
+        state.region = (state.region === clickedRegion) ? "ALL" : clickedRegion;
+        regionFilter.value = state.region;
+        updateApp();
+      });
+    });
+
+    // Controles de Zoom & Pan
+    document.getElementById("zoomIn").addEventListener("click", () => {
+      state.zoom = Math.min(state.zoom + 0.3, 3.2);
+      applyMapTransform();
+    });
+
+    document.getElementById("zoomOut").addEventListener("click", () => {
+      state.zoom = Math.max(state.zoom - 0.3, 0.8);
+      applyMapTransform();
+    });
+
+    document.getElementById("zoomReset").addEventListener("click", () => {
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+      applyMapTransform();
+    });
+
+    document.getElementById("toggleLabels").addEventListener("click", (e) => {
+      state.showLabels = !state.showLabels;
+      e.currentTarget.classList.toggle("bg-selva-900", state.showLabels);
+      e.currentTarget.classList.toggle("text-white", state.showLabels);
+      updateApp();
+    });
+
+    // Arrastre (Pan) del mapa con ratón y pantalla táctil
+    mapViewport.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".pueblo-marker")) return;
+      state.isDragging = true;
+      state.dragStartX = e.clientX - state.panX;
+      state.dragStartY = e.clientY - state.panY;
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!state.isDragging) return;
+      state.panX = e.clientX - state.dragStartX;
+      state.panY = e.clientY - state.dragStartY;
+      applyMapTransform();
+    });
+
+    window.addEventListener("mouseup", () => {
+      state.isDragging = false;
+    });
+
+    // Soporte táctil para arrastrar el mapa
+    mapViewport.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 1 && !e.target.closest(".pueblo-marker")) {
+        state.isDragging = true;
+        state.dragStartX = e.touches[0].clientX - state.panX;
+        state.dragStartY = e.touches[0].clientY - state.panY;
+      }
+    }, { passive: true });
+
+    mapViewport.addEventListener("touchmove", (e) => {
+      if (!state.isDragging || e.touches.length !== 1) return;
+      state.panX = e.touches[0].clientX - state.dragStartX;
+      state.panY = e.touches[0].clientY - state.dragStartY;
+      applyMapTransform();
+    }, { passive: true });
+
+    mapViewport.addEventListener("touchend", () => {
+      state.isDragging = false;
+    });
+
+    // Zoom con rueda del ratón
+    mapViewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.18 : -0.18;
+      state.zoom = Math.min(Math.max(state.zoom + delta, 0.8), 3.2);
+      applyMapTransform();
+    }, { passive: false });
+
+    // Colapsar/Expandir leyenda en móvil
+    document.getElementById("toggleLegend").addEventListener("click", (e) => {
+      legendGrid.classList.toggle("hidden");
+      const icon = e.currentTarget.querySelector("i");
+      icon.classList.toggle("fa-chevron-down");
+      icon.classList.toggle("fa-chevron-up");
+    });
+
+    // Reiniciar todo
+    document.getElementById("btnResetAll").addEventListener("click", () => {
+      state.search = "";
+      state.family = "ALL";
+      state.region = "ALL";
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+      searchInput.value = "";
+      familyFilter.value = "ALL";
+      regionFilter.value = "ALL";
+      applyMapTransform();
+      updateApp();
+    });
+
+    // Modal Nota Metodológica
+    const methodologyModal = document.getElementById("methodologyModal");
+    document.getElementById("btnMethodology").addEventListener("click", () => {
+      methodologyModal.classList.remove("hidden");
+    });
+    document.getElementById("closeMethodology").addEventListener("click", () => {
+      methodologyModal.classList.add("hidden");
+    });
+    document.getElementById("closeMethodologyBtn").addEventListener("click", () => {
+      methodologyModal.classList.add("hidden");
+    });
+    methodologyModal.addEventListener("click", (e) => {
+      if (e.target === methodologyModal) methodologyModal.classList.add("hidden");
+    });
+
+    // Arrancar aplicación
+    window.addEventListener("DOMContentLoaded", () => {
+      initControls();
+      updateApp();
+    });
+  </script>
+</body>
+</html>
